@@ -22,7 +22,7 @@ def read_options():
     parser.add_argument("--log_every", default=100, type=int)
     parser.add_argument("--eval_every", default=1000, type=int)    # 10000
     parser.add_argument("--fine_tune", action='store_true')
-    parser.add_argument("--max_neighbor", default=10, type=int)     # 50
+    parser.add_argument("--max_neighbor", default=9, type=int)     # 50
     parser.add_argument("--max_neb_rel", default=5, type=int)     # 50
 
     parser.add_argument("--no_meta", action='store_true')

@@ -3,7 +3,7 @@ from torch import optim
 from collections import deque
 from args import read_options
 from data_loader import *
-from matcher import *
+from model import *
 # from tensorboardX import SummaryWriter
 import os
 from tqdm import tqdm
@@ -43,11 +43,11 @@ class Trainer(object):
         self.num_rels_pad = len(self.rel2id.keys())+self.max_neb_rel
         self.batch_nums = 0
 
-        self.sub_GCN = sub_GCN(self.embed_dim, self.num_ents_pad, self.num_rels_pad, self.max_neighbor, self.device,
+        self.fskgc = fskgc(self.embed_dim, self.num_ents_pad, self.num_rels_pad, self.max_neighbor, self.device,
                                use_pretrain=self.use_pretrain, finetune=self.fine_tune)
-        self.sub_GCN.to(self.device)
+        self.fskgc.to(self.device)
 
-        self.parameters = filter(lambda p: p.requires_grad, self.sub_GCN.parameters())
+        self.parameters = filter(lambda p: p.requires_grad, self.fskgc.parameters())
         self.optim = optim.Adam(self.parameters, lr=self.lr, weight_decay=self.weight_decay)
 
         logging.info('LOADING CANDIDATES ENTITIES')
@@ -99,13 +99,13 @@ class Trainer(object):
     def save(self, path=None):
         if not path:
             path = self.save_path
-        torch.save(self.sub_GCN.state_dict(), path)
+        torch.save(self.fskgc.state_dict(), path)
 
     def load(self, path=None):
         if path:
-            self.sub_GCN.load_state_dict(torch.load(path))
+            self.fskgc.load_state_dict(torch.load(path))
         else:
-            self.sub_GCN.load_state_dict(torch.load(self.save_path))
+            self.fskgc.load_state_dict(torch.load(self.save_path))
 
     def graph_build(self):
         self.e1_neb = defaultdict(list)       # 实体： 邻居1, 邻居2...
@@ -140,7 +140,6 @@ class Trainer(object):
             subgraph_list = subgraph_list[:self.max_neighbor]
             for i in subgraph_list:
                 e_neb_dict[beg_node_str].append(i)
-
         else:
             neb1_num = len(subgraph_list)                # 此时邻居个数 =  起始节点  加  一阶邻居的个数
             for i in subgraph_list:
@@ -154,7 +153,7 @@ class Trainer(object):
                     neb_num = len(nei2_li) + neb1_num               # 总个数 = 第n个节点的邻居个数 加 此时列表邻居个数
                     if neb_num >= self.max_neighbor:                     # 总个数 大于 最大邻居个数
                         for i in nei2_li[:self.max_neighbor-neb1_num]:
-                            e_neb_dict[n1].append(i)            # 对应字典
+                            e_neb_dict[n1].append(i)                # 对应字典
                         subgraph_list.extend(e_neb_dict[n1])       # 从二阶邻居 里 选出 最大个数 - 一阶林觉个数
                         break
                     else:
@@ -335,7 +334,7 @@ class Trainer(object):
             # print(nebr_list[0].shape)
             # print(adj_list)
 
-            positive_score, negative_score = self.sub_GCN(hrt_list, neb_list,nebr_list, adj_list, isEval=False)
+            positive_score, negative_score = self.fskgc(hrt_list, neb_list,nebr_list, adj_list, isEval=False)
 
             margin_ = positive_score - negative_score
             loss = F.relu(self.margin - margin_).mean()
@@ -380,7 +379,7 @@ class Trainer(object):
                 break
 
     def eval(self, mode='dev'):
-        self.sub_GCN.eval()
+        self.fskgc.eval()
         few = self.few
         logging.info('EVALUATING ON %s DATA' % mode.upper())
         if mode == 'dev':
@@ -427,7 +426,7 @@ class Trainer(object):
                 adj_list = [support_adj, query_adj]
                 nebr_list = [support_nebr, query_nebr]
 
-                scores, _ = self.sub_GCN(ht_list, neb_list,  nebr_list, adj_list,isEval=True)
+                scores, _ = self.fskgc(ht_list, neb_list,  nebr_list, adj_list, isEval=True)
                 scores.detach()
                 scores = scores.data
 
